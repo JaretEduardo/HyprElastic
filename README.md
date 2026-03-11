@@ -1,5 +1,11 @@
 # HyprElastic
 
+![Lines of Code](./doc/loc-badge.svg)
+![C++](https://img.shields.io/badge/C++-00599C?style=flat&logo=c%2B%2B&logoColor=white)
+![Hyprland](https://img.shields.io/badge/Hyprland-33CCFF?style=flat)
+![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)
+![Meson](https://img.shields.io/badge/Meson-8B1D2E?style=flat)
+
 HyprElastic is a high-performance plugin for Hyprland that implements a "wobbly windows" effect using a spring-mass physics engine written in C++. 
 
 This project aims to provide a fluid and dynamic visual experience while maintaining the stability and low resource consumption required for a professional Linux environment.
