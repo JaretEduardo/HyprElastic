@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <hyprland/src/render/Renderer.hpp>
 
 inline HANDLE PHANDLE = nullptr;
 std::vector<std::unique_ptr<CWobblyWindow>> g_vWobblyWindows;
@@ -29,6 +30,9 @@ void onTick() {
 
     for (auto& ww : g_vWobblyWindows) {
         ww->update();
+        
+        if (ww->m_pWindow)
+            g_pHyprRenderer->damageWindow(ww->m_pWindow, true);
     }
 }
 
