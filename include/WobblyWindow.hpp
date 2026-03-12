@@ -1,27 +1,25 @@
 #pragma once
-#include <hyprland/src/plugins/PluginAPI.hpp>
-#include "SpringPhysics.hpp"
 #include <hyprland/src/desktop/view/Window.hpp>
-#include <vector>
+#include <hyprutils/math/Vector2D.hpp>
 
-extern HANDLE PHANDLE;
+using namespace Hyprutils::Math;
 
-const int GRID_SIZE = 4; 
+#define GRID_SIZE 4
 
-struct SGridPoint {
-    SpringPhysics x;
-    SpringPhysics y;
+struct SpringNode {
+    float posX = 0, posY = 0;
+    float velX = 0, velY = 0;
+    float targetX = 0, targetY = 0;
+    float forceX = 0, forceY = 0;
 };
 
 class CWobblyWindow {
 public:
-    CWobblyWindow(PHLWINDOW pWindow);
-    void update();
-    
-    Vector2D getOffsetAt(float relX, float relY);
-
     PHLWINDOW m_pWindow;
+    SpringNode m_grid[GRID_SIZE][GRID_SIZE];
 
-private:
-    SGridPoint m_grid[GRID_SIZE][GRID_SIZE];
+    CWobblyWindow(PHLWINDOW pWindow);
+    
+    void update(float deltaTime);
+    Vector2D getOffsetAt(float u, float v);
 };

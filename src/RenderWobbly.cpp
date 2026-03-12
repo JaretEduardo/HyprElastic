@@ -2,7 +2,7 @@
 #include "WobblyWindow.hpp"
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/render/OpenGL.hpp>
-#include <hyprland/src/render/decorations/DecorationPositioner.hpp>
+#include <hyprland/src/render/Renderer.hpp> // Vital para decirle a la GPU que dibuje
 
 CRenderWobbly::CRenderWobbly(PHLWINDOW pWindow, CWobblyWindow* pPhysics) 
     : IHyprWindowDecoration(pWindow), m_pWindow(pWindow), m_pPhysics(pPhysics) {
@@ -19,25 +19,26 @@ void CRenderWobbly::onPositioningReply(const SDecorationPositioningReply& reply)
 void CRenderWobbly::draw(PHLMONITOR pMonitor, float const& a) {
     if (!m_pWindow || !m_pPhysics) return;
 
+    // Obtenemos qué tanto se ha estirado el centro de nuestra malla elástica
     Vector2D offset = m_pPhysics->getOffsetAt(0.5f, 0.5f);
 
-    offset.x = std::clamp(offset.x, -100.0, 100.0);
-    offset.y = std::clamp(offset.y, -100.0, 100.0);
-
+    // HACEMOS LA CAJA MÁS GRANDE QUE LA VENTANA (20 píxeles extra por lado)
+    // Así sobresale por los bordes y la ventana original no la puede tapar.
     CBox shadowBox = {
-        m_pWindow->m_realPosition->value().x + offset.x,
-        m_pWindow->m_realPosition->value().y + offset.y,
-        m_pWindow->m_realSize->value().x,
-        m_pWindow->m_realSize->value().y
+        m_pWindow->m_realPosition->value().x + offset.x - 20,
+        m_pWindow->m_realPosition->value().y + offset.y - 20,
+        m_pWindow->m_realSize->value().x + 40,
+        m_pWindow->m_realSize->value().y + 40
     };
 
-    CHyprColor dynamicColor = m_pWindow->m_realBorderColor.m_colors[0];
-    dynamicColor.a = 0.4f * a;
+    // UN ROJO CHILLÓN AL 100% DE OPACIDAD (Imposible no verlo)
+    CHyprColor debugColor = {1.0f, 0.0f, 0.0f, 1.0f}; 
 
     CHyprOpenGLImpl::SRectRenderData renderData;
     renderData.round = (int)m_pWindow->rounding();
 
-    g_pHyprOpenGL->renderRect(shadowBox, dynamicColor, renderData);
+    // Dibujamos el rectángulo de gelatina roja
+    g_pHyprOpenGL->renderRect(shadowBox, debugColor, renderData);
 }
 
 eDecorationType CRenderWobbly::getDecorationType() {
@@ -48,4 +49,17 @@ void CRenderWobbly::updateWindow(PHLWINDOW pWindow) {
     m_pWindow = pWindow;
 }
 
-void CRenderWobbly::damageEntire() {}
+// ESTA ERA LA PIEZA FALTANTE: Avisar a la GPU que el área se está moviendo
+void CRenderWobbly::damageEntire() {
+    if (!m_pWindow) return;
+    
+    // Le decimos a Hyprland que redibuje un área enorme alrededor de la ventana
+    // para asegurarnos de que no nos corte la animación.
+    CBox damageBox = {
+        m_pWindow->m_realPosition->value().x - 100,
+        m_pWindow->m_realPosition->value().y - 100,
+        m_pWindow->m_realSize->value().x + 200,
+        m_pWindow->m_realSize->value().y + 200
+    };
+    g_pHyprRenderer->damageBox(damageBox);
+}

@@ -18,8 +18,9 @@ inc = include_directories('include')
 shared_module('hyprelastic',
   'src/main.cpp',
   'src/WobblyWindow.cpp',
-  'src/SpringPhysics.cpp',
+  # 'src/SpringPhysics.cpp', <--- BORRA ESTA LÍNEA
   'src/RenderWobbly.cpp',
+  'src/WobblyTransformer.cpp',
   include_directories: inc,
   dependencies: [hyprland, pixman, libdrm],
   install: true,

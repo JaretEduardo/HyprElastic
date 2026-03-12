@@ -3,6 +3,7 @@
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
 #include "WobblyWindow.hpp"
+#include "RenderWobbly.hpp"
 #include <vector>
 #include <memory>
 #include <algorithm>
@@ -21,6 +22,8 @@ void onTick() {
 
         if (it == g_vWobblyWindows.end()) {
             g_vWobblyWindows.push_back(std::make_unique<CWobblyWindow>(w));
+            
+            HyprlandAPI::addWindowDecoration(PHANDLE, w, Hyprutils::Memory::makeUnique<CRenderWobbly>(w, g_vWobblyWindows.back().get()));
         }
     }
 
@@ -29,7 +32,7 @@ void onTick() {
     });
 
     for (auto& ww : g_vWobblyWindows) {
-        ww->update();
+        ww->update(0.016f); 
         
         if (ww->m_pWindow)
             g_pHyprRenderer->damageWindow(ww->m_pWindow, true);
