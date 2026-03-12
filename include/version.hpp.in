@@ -1,0 +1,2 @@
+// "@PLUGIN_VERSION@" will be replaced with the actual version via meson
+#define PLUGIN_VERSION "@PLUGIN_VERSION@"

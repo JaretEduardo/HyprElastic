@@ -6,3 +6,7 @@ libhyprelastic_*.so
 .vscode/
 .idea/
 *.swp
+
+compile_flags.txt
+compile_commands.json
+/.direnv

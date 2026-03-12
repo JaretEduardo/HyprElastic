@@ -1,27 +1,21 @@
-project('HyprElastic', 'cpp',
-  version: '0.1.0',
-  default_options: [
-    'cpp_std=c++26',
-    'buildtype=release',
-    'warning_level=2'
-  ]
+project('wigglewobble', 'cpp', 'c',
+  # we always take the VERSION file as the single source of truth
+  version: run_command('cat', join_paths(meson.project_source_root(), 'VERSION'), check: true).stdout().strip(),
+  default_options: ['buildtype=release'],
 )
 
-add_project_arguments('-DWLR_USE_UNSTABLE', '-fno-gnu-unique', language: 'cpp')
+cpp_compiler = meson.get_compiler('cpp')
+if cpp_compiler.has_argument('-std=c++26')
+  add_global_arguments('-std=c++26', language: 'cpp')
+elif cpp_compiler.has_argument('-std=c++2c')
+  add_global_arguments('-std=c++2c', language: 'cpp')
+else
+  error('Could not configure current C++ compiler (' + cpp_compiler.get_id() + ' ' + cpp_compiler.version() + ') with required C++ standard (C++26)')
+endif
 
-hyprland = dependency('hyprland')
-pixman = dependency('pixman-1')
-libdrm = dependency('libdrm')
+hyprland_headers = dependency('hyprland')
 
-inc = include_directories('include')
+incdir = include_directories('include')
 
-shared_module('hyprelastic',
-  'src/main.cpp',
-  'src/WobblyWindow.cpp',
-  # 'src/SpringPhysics.cpp', <--- BORRA ESTA LÍNEA
-  'src/RenderWobbly.cpp',
-  'src/WobblyTransformer.cpp',
-  include_directories: inc,
-  dependencies: [hyprland, pixman, libdrm],
-  install: true,
-)
+subdir('include')
+subdir('src')
