@@ -2,36 +2,33 @@
 #include <hyprland/src/event/EventBus.hpp>
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
-#include "SpringPhysics.hpp"
-#include <fstream>
-#include <any>
+#include "WobblyWindow.hpp"
+#include <vector>
+#include <memory>
+#include <algorithm>
 
 inline HANDLE PHANDLE = nullptr;
-SpringPhysics g_physics(50.0f, 4.0f);
-std::ofstream logFile;
+std::vector<std::unique_ptr<CWobblyWindow>> g_vWobblyWindows;
 
 Hyprutils::Signal::CHyprSignalListener g_TickListener;
 
 void onTick() {
-    PHLWINDOW pActiveWindow = nullptr;
     for (auto& w : g_pCompositor->m_windows) {
-        if (g_pCompositor->isWindowActive(w)) {
-            pActiveWindow = w;
-            break;
+        auto it = std::find_if(g_vWobblyWindows.begin(), g_vWobblyWindows.end(), [&](const auto& ww) {
+            return ww->m_pWindow == w;
+        });
+
+        if (it == g_vWobblyWindows.end()) {
+            g_vWobblyWindows.push_back(std::make_unique<CWobblyWindow>(w));
         }
     }
 
-    if (pActiveWindow) {
-        float windowX = pActiveWindow->m_realPosition->value().x;
-        g_physics.setTarget(windowX);
-    }
-    
-    g_physics.update(0.016f);
+    std::erase_if(g_vWobblyWindows, [](const auto& ww) {
+        return !ww->m_pWindow || std::find(g_pCompositor->m_windows.begin(), g_pCompositor->m_windows.end(), ww->m_pWindow) == g_pCompositor->m_windows.end();
+    });
 
-    static int frameCount = 0;
-    if (frameCount++ % 60 == 0) {
-        logFile << "[Physics] Spring position: " << g_physics.getPosition() << "\n";
-        logFile.flush();
+    for (auto& ww : g_vWobblyWindows) {
+        ww->update();
     }
 }
 
@@ -41,16 +38,14 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() {
 
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
-    logFile.open("/tmp/hyprelastic.log", std::ios::out | std::ios::trunc);
-    logFile << "--- Gelatin Successfully Connected ---\n";
-
+    
     g_TickListener = Event::bus()->m_events.tick.registerListener([](std::any data) {
         onTick();
     });
 
-    return {"HyprElastic", "Wobbly windows", "Jaret Eduardo", "0.1.0"};
+    return {"HyprElastic", "Wobbly windows manager", "Jaret Eduardo", "0.1.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
-    logFile.close();
+    g_vWobblyWindows.clear();
 }
