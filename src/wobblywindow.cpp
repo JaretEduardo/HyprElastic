@@ -59,11 +59,27 @@ bool CWobblyWindow::step(Time::steady_tp time) {
         m_particlePositions[i * 2] += vel.x * dt;
         m_particlePositions[i * 2 + 1] += vel.y * dt;
 
+        // Keep vertices near their targets to avoid mesh inversions.
+        Vector2D clampedPos = {m_particlePositions[i * 2], m_particlePositions[i * 2 + 1]};
+        Vector2D delta = clampedPos - targetPosition;
+        const float deltaSize = delta.size();
+        if (deltaSize > s_maxDisplacement && deltaSize != 0) {
+            delta = delta * (s_maxDisplacement / deltaSize);
+            clampedPos = targetPosition + delta;
+            m_particlePositions[i * 2] = clampedPos.x;
+            m_particlePositions[i * 2 + 1] = clampedPos.y;
+        }
+
         totalVel += vel;
     }
 
     const bool shouldEnd = m_windowMovement.size() == 0
         and totalVel.size() / (m_particlePositions.size() / 2.f) < .001f;
+
+    if (shouldEnd)
+        ++m_settledFrames;
+    else
+        m_settledFrames = 0;
 
     // HACK: why is it ever nan??
     if (std::isnan(m_particlePositions[0])) {
@@ -71,7 +87,7 @@ bool CWobblyWindow::step(Time::steady_tp time) {
         m_particlePositions = CRenderWobblyWindowPassElement::s_baseVerts;
 
         m_particleVelocities.clear();
-        m_particleVelocities.resize(m_particlePositions.size());
+        m_particleVelocities.resize(m_particlePositions.size() / 2);
     }
     //
     // std::println(
@@ -82,15 +98,43 @@ bool CWobblyWindow::step(Time::steady_tp time) {
     // );
     m_windowMovement = Vector2D {};
 
-    return shouldEnd;
+    // Require a few consecutive settled frames to avoid visible on/off flicker.
+    return m_settledFrames > 12;
 }
 
 void CWobblyWindow::applyMovement(const Vector2D& movement) {
-    m_windowMovement = movement;
+    const Vector2D amplifiedMovement = movement * s_movementAmplification;
+    m_windowMovement = amplifiedMovement;
+    m_settledFrames = 0;
+
+    constexpr Vector2D kCenter = {0.5, 0.5};
 
     for (unsigned int i = 0; i < m_particlePositions.size() / 2; i++) {
-        m_particlePositions[i * 2] -= movement.x;
-        m_particlePositions[i * 2 + 1] -= movement.y;
+        const Vector2D pos = {m_particlePositions[i * 2], m_particlePositions[i * 2 + 1]};
+        const Vector2D target = m_targetPositions[i];
+
+        float influence = 0.45f;
+        if (m_grabPosition.has_value()) {
+            const float distance = m_grabPosition.value().distance(pos);
+            const float t = std::clamp(1.f - distance * 1.2f, 0.f, 1.f);
+            influence = 0.15f + 0.85f * (t * t * (3.f - 2.f * t));
+        } else {
+            const float centerDistance = kCenter.distance(pos);
+            const float t = std::clamp(1.f - centerDistance * 1.4f, 0.f, 1.f);
+            influence = 0.25f + 0.35f * t;
+        }
+
+        Vector2D newPos = pos - amplifiedMovement * influence;
+        Vector2D delta = newPos - target;
+        float d = delta.size();
+        if (d > s_maxDisplacement && d != 0) {
+            delta = delta * (s_maxDisplacement / d);
+            newPos = target + delta;
+        }
+
+        m_particlePositions[i * 2] = newPos.x;
+        m_particlePositions[i * 2 + 1] = newPos.y;
+        m_particleVelocities[i] -= amplifiedMovement * (s_velocityImpulse * influence);
     }
 }
 

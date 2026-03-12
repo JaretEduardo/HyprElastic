@@ -10,12 +10,16 @@ class CWobblyWindow {
     };
 
     Time::steady_tp m_lastTime {Time::steadyNow()};
+    int m_settledFrames = 0;
 
   public:
     // static wobble parameters
-    static inline float s_springStrength = 500.f;
-    static inline float s_dampingStrength = 12.f;
-    static inline float s_drag = 0.4f;
+    static inline float s_springStrength = 560.f;
+    static inline float s_dampingStrength = 26.f;
+    static inline float s_drag = 0.55f;
+    static inline float s_movementAmplification = 0.16f;
+    static inline float s_velocityImpulse = 0.25f;
+    static inline float s_maxDisplacement = 0.02f;
 
     std::vector<float> m_particlePositions;
     std::vector<Vector2D> m_particleVelocities;

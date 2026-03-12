@@ -5,6 +5,9 @@
 
 #include <any>
 #include <hyprland/src/Compositor.hpp>
+#if WW_HAS_EVENT_BUS
+#include <hyprland/src/event/EventBus.hpp>
+#endif
 #include <hyprland/src/helpers/time/Time.hpp>
 #include <hyprland/src/managers/eventLoop/EventLoopManager.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
@@ -21,6 +24,18 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() {
 std::map<PHLWINDOWREF, CFramebuffer> g_windowFramebuffers;
 std::map<PHLWINDOWREF, Vector2D> g_windowPositions;
 std::map<PHLWINDOWREF, CWobblyWindow> g_wobblyWindows;
+
+static CBox getWindowRenderBox(PHLWINDOW pWindow) {
+    return pWindow->getFullWindowBoundingBox();
+}
+
+static CBox getWindowRenderBox(PHLWINDOWREF pWindowRef) {
+    auto pWindow = pWindowRef.lock();
+    if (!pWindow)
+        return CBox {};
+
+    return getWindowRenderBox(pWindow);
+}
 
 void registerWindow(PHLWINDOW pWindow) {
     g_windowPositions[pWindow] = pWindow->m_realPosition->value();
@@ -77,7 +92,7 @@ void tick(SP<CEventLoopTimer> self, void* data) {
         const bool shouldErase = window->m_fadingOut or wobble.step(now);
 
         if (not shouldErase) {
-            const CBox windowBox = window->getFullWindowBoundingBox();
+            const CBox windowBox = getWindowRenderBox(window);
             CBox wobbleBox = wobble.getBox();
             wobbleBox.scale(Vector2D {windowBox.width, windowBox.height});
             wobbleBox.translate(Vector2D {windowBox.x, windowBox.y});
@@ -92,9 +107,13 @@ void tick(SP<CEventLoopTimer> self, void* data) {
         scheduleTick();
 }
 
+#if WW_HAS_EVENT_BUS
+Hyprutils::Signal::CHyprSignalListener g_openWindow;
+Hyprutils::Signal::CHyprSignalListener g_closeWindow;
+#else
 static SP<HOOK_CALLBACK_FN> g_openWindow = nullptr;
 static SP<HOOK_CALLBACK_FN> g_closeWindow = nullptr;
-static SP<HOOK_CALLBACK_FN> g_tick = nullptr;
+#endif
 inline CFunctionHook* g_pRenderWindowHook = nullptr;
 
 typedef void (*origRenderWindow)(
@@ -119,6 +138,16 @@ void hkRenderWindow(
     bool standalone = false
 ) {
     CHyprRenderer* pRenderer = (CHyprRenderer*)thisptr;
+    static bool notifiedHookCall = false;
+    if (!notifiedHookCall) {
+        notifiedHookCall = true;
+        HyprlandAPI::addNotification(
+            PHANDLE,
+            "[WiggleWobble] renderWindow hook active.",
+            CHyprColor {0.2, 1.0, 0.2, 1.0},
+            2500
+        );
+    }
 
     const bool shouldWobble = [&]() -> bool {
         if (mode != RENDER_PASS_MAIN and mode != RENDER_PASS_ALL) {
@@ -136,10 +165,11 @@ void hkRenderWindow(
 
             auto&& wobble = g_wobblyWindows[pWindow];
 
-            const auto windowBox = pWindow->getFullWindowBoundingBox();
-            const auto windowSize = Vector2D {windowBox.width, windowBox.height};
+            const auto movementBaseSize = pWindow->m_realSize->value();
+            const auto windowSize = Vector2D {movementBaseSize.x, movementBaseSize.y};
+            const auto movementPx = pos - g_windowPositions[pWindow];
 
-            if (windowSize.size() != 0 and g_pInputManager->m_currentlyDraggedWindow == pWindow) {
+            if (windowSize.size() != 0) {
                 if (not wobble.m_grabPosition.has_value()) {
                     auto&& mousePos = g_pInputManager->getMouseCoordsInternal();
                     wobble.m_grabPosition = (mousePos - pos) / windowSize;
@@ -148,7 +178,10 @@ void hkRenderWindow(
                 wobble.m_grabPosition = std::nullopt;
             }
 
-            wobble.applyMovement((pos - g_windowPositions[pWindow]) / windowSize);
+            const auto normalizedMovement =
+                windowSize.size() != 0 ? movementPx / windowSize : Vector2D {};
+            // Invert to make the content lag opposite to drag direction.
+            wobble.applyMovement(normalizedMovement * -1.f);
 
             // update last pos
             g_windowPositions[pWindow] = pos;
@@ -158,7 +191,6 @@ void hkRenderWindow(
     }();
 
     auto* const pOldFramebuffer = g_pHyprOpenGL->m_renderData.currentFB;
-    const auto windowBox = pWindow->getFullWindowBoundingBox();
 
     if (shouldWobble) {
         PHLWINDOWREF ref {pWindow};
@@ -166,15 +198,14 @@ void hkRenderWindow(
         // create it if not exists
         auto&& windowFB = g_windowFramebuffers[ref];
 
-        if (windowBox.width > windowFB.m_size.x or windowBox.height > windowFB.m_size.y) {
-            windowFB.alloc(windowBox.width, windowBox.height);
+        // Use monitor-sized FB so screen-space scissor coords stay consistent
+        // with the window's natural render position.  No floatingOffset hack needed.
+        const int fbWidth  = (int)pMonitor->m_transformedSize.x;
+        const int fbHeight = (int)pMonitor->m_transformedSize.y;
+
+        if (fbWidth != (int)windowFB.m_size.x or fbHeight != (int)windowFB.m_size.y) {
+            windowFB.alloc(fbWidth, fbHeight);
         }
-
-        // render window at 0,0 (we translate it afterward)
-        pWindow->m_floatingOffset -= Vector2D {windowBox.x, windowBox.y};
-
-        // HACK: otherwise renderWindow will set an opaque region at top-left
-        pWindow->m_alpha->setValueAndWarp(0.999f);
 
         pRenderer->m_renderPass.add(makeUnique<CBindOwnFramebufferPassElement>(&windowFB));
     }
@@ -192,11 +223,6 @@ void hkRenderWindow(
     );
 
     if (shouldWobble) {
-        pWindow->m_floatingOffset += Vector2D {windowBox.x, windowBox.y};
-
-        // HACK: this might interfere with anims, but it's all I got
-        // pWindow->m_alpha->setValueAndWarp(pWindow->m_alpha->goal() + 0.001f);
-
         pRenderer->m_renderPass.add(
             makeUnique<CRenderWobblyWindowPassElement>(pOldFramebuffer, pWindow)
         );
@@ -207,17 +233,17 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
     const std::string HASH = __hyprland_api_get_hash();
+    const std::string CLIENT_HASH = __hyprland_api_get_client_hash();
 
     // ALWAYS add this to your plugins. It will prevent random crashes coming from
     // mismatched header versions.
-    if (HASH != GIT_COMMIT_HASH) {
+    if (HASH != CLIENT_HASH) {
         HyprlandAPI::addNotification(
             PHANDLE,
-            "[WiggleWobble] Mismatched headers! Can't proceed.",
+            "[WiggleWobble] Header hash mismatch, loading anyway (compat mode).",
             CHyprColor {1.0, 0.2, 0.2, 1.0},
             5000
         );
-        throw std::runtime_error("[WiggleWobble] Version mismatch");
     }
 
     CRenderWobblyWindowPassElement::initGPUObjects();
@@ -225,6 +251,15 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (auto&& window : g_pCompositor->m_windows)
         registerWindow(window);
 
+#if WW_HAS_EVENT_BUS
+    g_openWindow = Event::bus()->m_events.window.open.registerListener([](std::any data) {
+        registerWindow(std::any_cast<PHLWINDOW>(data));
+    });
+
+    g_closeWindow = Event::bus()->m_events.window.close.registerListener([](std::any data) {
+        unregisterWindow(std::any_cast<PHLWINDOW>(data));
+    });
+#else
     g_openWindow = HyprlandAPI::registerCallbackDynamic(
         PHANDLE,
         "openWindow",
@@ -240,6 +275,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             unregisterWindow(std::any_cast<PHLWINDOW>(data));
         }
     );
+#endif
 
     g_wobbleTickTimer =
         SP<CEventLoopTimer>(new CEventLoopTimer(std::chrono::microseconds(500), tick, nullptr));
@@ -247,12 +283,45 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     {
         static const auto METHODS = HyprlandAPI::findFunctionsByName(PHANDLE, "renderWindow");
-        g_pRenderWindowHook =
-            HyprlandAPI::createFunctionHook(handle, METHODS[0].address, (void*)&hkRenderWindow);
-        g_pRenderWindowHook->hook();
-    }
+        if (METHODS.empty()) {
+            HyprlandAPI::addNotification(
+                PHANDLE,
+                "[WiggleWobble] Failed to find renderWindow symbol.",
+                CHyprColor {1.0, 0.2, 0.2, 1.0},
+                5000
+            );
+            throw std::runtime_error("[WiggleWobble] renderWindow symbol not found");
+        }
 
-    HyprlandAPI::reloadConfig();
+        size_t methodIndex = 0;
+        for (size_t i = 0; i < METHODS.size(); ++i) {
+            if (METHODS[i].demangled.contains("eRenderPassMode") ||
+                METHODS[i].signature.contains("eRenderPassMode")) {
+                methodIndex = i;
+                break;
+            }
+        }
+
+        g_pRenderWindowHook =
+            HyprlandAPI::createFunctionHook(handle, METHODS[methodIndex].address, (void*)&hkRenderWindow);
+
+        if (!g_pRenderWindowHook || !g_pRenderWindowHook->hook()) {
+            HyprlandAPI::addNotification(
+                PHANDLE,
+                "[WiggleWobble] Failed to hook renderWindow.",
+                CHyprColor {1.0, 0.2, 0.2, 1.0},
+                5000
+            );
+            throw std::runtime_error("[WiggleWobble] renderWindow hook failed");
+        }
+
+        HyprlandAPI::addNotification(
+            PHANDLE,
+            "[WiggleWobble] Hooked renderWindow overload #" + std::to_string(methodIndex),
+            CHyprColor {0.2, 0.8, 1.0, 1.0},
+            2500
+        );
+    }
 
     return {"wigglewobble", "Wobbly windows for Hyprland", "All-Purpose Mat", PLUGIN_VERSION};
 }
@@ -260,8 +329,13 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 APICALL EXPORT void PLUGIN_EXIT() {
     CRenderWobblyWindowPassElement::deinitGPUObjects();
     g_pRenderWindowHook = nullptr;
+#if WW_HAS_EVENT_BUS
+    g_closeWindow.reset();
+    g_openWindow.reset();
+#else
     g_closeWindow = nullptr;
     g_openWindow = nullptr;
+#endif
 
     g_pEventLoopManager->removeTimer(g_wobbleTickTimer);
 }
