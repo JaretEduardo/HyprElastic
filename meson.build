@@ -1,13 +1,13 @@
 project('HyprElastic', 'cpp',
   version: '0.1.0',
   default_options: [
-    'cpp_std=c++23',
+    'cpp_std=c++26',
     'buildtype=release',
     'warning_level=2'
   ]
 )
 
-add_project_arguments('-DWLR_USE_UNSTABLE', language: 'cpp')
+add_project_arguments('-DWLR_USE_UNSTABLE', '-fno-gnu-unique', language: 'cpp')
 
 hyprland = dependency('hyprland')
 pixman = dependency('pixman-1')

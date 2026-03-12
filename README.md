@@ -77,5 +77,22 @@ plugin {
 
 This is a personal project open to the community. If you find a bug or have an idea to improve the physics engine, please open an Issue or a Pull Request.
 
+## Developer Guide
+
+If you wish to contribute to **HyprElastic** or build it from source for development, please note that the Hyprland plugin system and the Linux dynamic linker (`glibc`) can aggressively cache older versions of the plugin in RAM. This prevents new changes from reflecting after recompiling.
+
+To solve this and ensure a smooth development environment, use the provided hot-reload script:
+
+1. Make the script executable (only needed once):
+   ```bash
+   chmod +x dev.sh
+   ```
+2. Run the script every time you make changes to the C++ code:
+    ```bash
+    ./dev.sh
+    ```
+
+This script will compile the code, generate a binary with a unique timestamp to bypass RAM caching, and automatically inject it into your active Hyprland session.
+
 Author: Jaret Eduardo
 Software Developer

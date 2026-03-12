@@ -1,0 +1,8 @@
+build/
+
+.last_plugin
+libhyprelastic_*.so
+
+.vscode/
+.idea/
+*.swp
