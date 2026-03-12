@@ -10,3 +10,6 @@ libhyprelastic_*.so
 compile_flags.txt
 compile_commands.json
 /.direnv
+
+build-host
+build-native
