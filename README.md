@@ -6,38 +6,38 @@
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)
 ![Meson](https://img.shields.io/badge/Meson-8B1D2E?style=flat)
 
-Plugin de Hyprland que agrega efecto "wobbly windows" (ventanas elásticas) usando una malla deformable y un modelo de resorte-amortiguador en C++.
+Hyprland plugin that adds a "wobbly windows" effect using a deformable mesh and a spring-damper model in C++.
 
-## Como funciona
+## How it works
 
-HyprElastic se engancha al render de ventanas (`renderWindow`) y aplica este flujo:
+HyprElastic hooks into window rendering (`renderWindow`) and applies this flow:
 
-1. Captura la ventana en un framebuffer.
-2. Deforma una malla UV subdividida (grid) en tiempo real.
-3. Renderiza el resultado deformado sobre la escena.
+1. Captures the window into a framebuffer.
+2. Deforms a subdivided UV mesh (grid) in real time.
+3. Renders the deformed result back onto the scene.
 
-La fisica base sigue:
+The core physics model is:
 
 $$F = -k \cdot x - c \cdot v$$
 
-- $k$: rigidez del resorte.
-- $c$: amortiguacion.
-- $x$: desplazamiento.
-- $v$: velocidad.
+- $k$: spring stiffness.
+- $c$: damping.
+- $x$: displacement.
+- $v$: velocity.
 
-El plugin incluye clamps y histeresis para evitar flicker, inversion de malla y saltos visuales.
+The plugin includes clamping and hysteresis to reduce flicker, mesh inversion, and visual jumps.
 
-## Compatibilidad
+## Compatibility
 
-- Hyprland 0.54.x (host) y compatibilidad adicional con APIs de 0.50.x.
+- Hyprland 0.54.x (host) with additional compatibility for 0.50.x APIs.
 - Linux.
-- Compilacion con Meson + Ninja.
+- Built with Meson + Ninja.
 
-Importante: el `.so` debe compilarse contra la misma ABI/headers de la instancia de Hyprland donde se va a cargar. Si compilas en un entorno (por ejemplo `nix develop`) y cargas en otro host distinto, puede fallar por simbolos/ABI.
+Important: the `.so` must be compiled against the same ABI/headers as the Hyprland instance where it will be loaded. If you build in one environment (for example `nix develop`) and load on a different host, it may fail due to symbol/ABI mismatches.
 
-## Instalacion
+## Installation
 
-### Opcion 1: Compilar manual
+### Option 1: Manual build
 
 ```bash
 git clone https://github.com/JaretEduardo/HyprElastic.git
@@ -46,69 +46,69 @@ cd HyprElastic
 /usr/bin/meson compile -C build-native
 ```
 
-### Opcion 2: Nix
+### Option 2: Nix
 
-Puedes usar `flake.nix`/`plugin.nix`, pero asegurate de cargar el plugin en una sesion Hyprland compatible con ese build.
+You can use `flake.nix`/`plugin.nix`, but make sure to load the plugin in a Hyprland session compatible with that build.
 
-## Uso rapido
+## Quick usage
 
-El proyecto incluye `run.sh` con 3 modos:
+The project includes `run.sh` with 3 modes:
 
 ```bash
 chmod +x run.sh
 
-# Compila y hot-reload en tu sesion actual de Hyprland
+# Build and hot-reload in your current Hyprland session
 ./run.sh dev
 
-# Solo compila
+# Build only
 ./run.sh build
 
-# Abre una sesion de prueba con hyprlandd.conf
+# Launch a test session with hyprlandd.conf
 ./run.sh nested
 ```
 
-Variables opcionales:
+Optional variables:
 
 ```bash
 BUILD_DIR=build-native MESON_BIN=/usr/bin/meson ./run.sh dev
 ```
 
-## Cargar plugin manualmente
+## Load plugin manually
 
-Si no usas `./run.sh dev`, puedes cargar manual:
+If you are not using `./run.sh dev`, you can load it manually:
 
 ```bash
-hyprctl plugin load /ruta/absoluta/libwigglewobble.so
+hyprctl plugin load /absolute/path/libwigglewobble.so
 hyprctl plugin list
 ```
 
-Para actualizar sin residuos, primero descarga la instancia anterior:
+To reload cleanly, unload the previous instance first:
 
 ```bash
-hyprctl plugin unload /ruta/absoluta/libwigglewobble.so
+hyprctl plugin unload /absolute/path/libwigglewobble.so
 ```
 
-## Compartir en tu grupo
+## Sharing with your team
 
-Recomendacion para que les funcione a todos:
+Recommended workflow so it works for everyone:
 
-1. Clonar repo.
-2. Compilar localmente en su propia maquina/sesion de Hyprland.
-3. Usar `./run.sh dev` para hot-reload seguro.
+1. Clone the repository.
+2. Build locally on each machine/Hyprland session.
+3. Use `./run.sh dev` for safe hot-reload.
 
-Esto evita problemas de cache del linker y de incompatibilidad ABI entre entornos.
+This avoids linker cache issues and ABI incompatibility across environments.
 
 ## Troubleshooting
 
-- Se corta/parpadea en workspace vacio:
-    - Actualiza al ultimo commit (incluye fixes de damage/scissor y framebuffer monitor-sized).
-- `undefined symbol` al cargar:
-    - Recompila en el mismo entorno donde corre Hyprland (no mezclar build de Nix con host distinto).
-- Se carga dos veces:
-    - Usa `./run.sh dev` (desmonta instancias viejas y carga una copia unica por timestamp).
+- Clipping or flicker on an empty workspace:
+    - Update to the latest commit (includes damage/scissor and monitor-sized framebuffer fixes).
+- `undefined symbol` on load:
+    - Rebuild in the same environment where Hyprland is running (do not mix Nix build with a different host runtime).
+- Plugin loads twice:
+    - Use `./run.sh dev` (it unloads old instances and loads a unique timestamped copy).
 
-## Contribuciones
+## Contributions
 
-Issues y PRs son bienvenidos.
+Issues and PRs are welcome.
 
-Autor: Jaret Eduardo
+Author: Jaret Eduardo
