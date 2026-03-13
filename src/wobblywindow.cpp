@@ -116,8 +116,8 @@ void CWobblyWindow::applyMovement(const Vector2D& movement) {
         float influence = 0.45f;
         if (m_grabPosition.has_value()) {
             const float distance = m_grabPosition.value().distance(pos);
-            const float t = std::clamp(1.f - distance * 1.2f, 0.f, 1.f);
-            influence = 0.15f + 0.85f * (t * t * (3.f - 2.f * t));
+            const float t = std::clamp(1.f - distance * 0.95f, 0.f, 1.f);
+            influence = 0.32f + 0.68f * (t * t * (3.f - 2.f * t));
         } else {
             const float centerDistance = kCenter.distance(pos);
             const float t = std::clamp(1.f - centerDistance * 1.4f, 0.f, 1.f);
